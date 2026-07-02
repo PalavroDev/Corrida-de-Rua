@@ -69,8 +69,7 @@ Trabalho:
 | "command not found: node" | Node.js não foi instalado corretamente.
 Reinstale. |
 | "command not found: git" | Git não foi instalado. Reinstale. |
-| App não carrega no celular | Verifique se celular e PC estão no mesmo
-Wi-Fi |
+| App não carrega no celular | Verifique se celular e PC estão no mesmo Wi-Fi |
 | "Firebase: Error (auth/...)" | Verifique sua conexão com a internet |
 | npm install demorou muito | Normal. Aguarde até terminar. |
 ---
