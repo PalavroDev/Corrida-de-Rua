@@ -1,11 +1,10 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { doc, updateDoc, getDocs, collection, query, where } from 'firebase/firestore';
 import { useAuth } from '../../contexts/AuthContext';
 import LevelBadge from '../../components/LevelBadge';
 import XPProgressBar from '../../components/XPProgressBar';
-import { db } from '../../config/firebase';
+import { editarPerfil } from '../../services/userService';
 
 export default function ProfileScreen() {
   const { userData, user, recarregarUsuario, logout } = useAuth();
@@ -29,24 +28,11 @@ export default function ProfileScreen() {
     const usernameLower = novoUsername.toLowerCase().trim();
     setSalvando(true);
     try {
-      // Verificar se username já existe (se mudou)
-      if (usernameLower !== userData?.username) {
-        const q = query(collection(db, 'users'), where('username', '==', usernameLower));
-        const snap = await getDocs(q);
-        if (!snap.empty) {
-          Alert.alert('Erro', 'Este username já está em uso');
-          setSalvando(false);
-          return;
-        }
-      }
-      await updateDoc(doc(db, 'users', user.uid), {
-        nome: novoNome.trim(),
-        username: usernameLower,
-      });
+      await editarPerfil(novoNome.trim(), usernameLower);
       await recarregarUsuario();
       setModalVisible(false);
     } catch (e) {
-      Alert.alert('Erro', 'Não foi possível salvar');
+      Alert.alert('Erro', e.status === 409 ? 'Este username já está em uso' : 'Não foi possível salvar');
     } finally {
       setSalvando(false);
     }

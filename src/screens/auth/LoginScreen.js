@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { useAuth } from '../../contexts/AuthContext';
+import { mensagemErro } from '../../services/cognito';
 
 export default function LoginScreen({ navigation }) {
   const [email, setEmail] = useState('');
@@ -14,7 +15,12 @@ export default function LoginScreen({ navigation }) {
     try {
       await login(email, senha);
     } catch (e) {
-      Alert.alert('Erro', 'Email ou senha incorretos');
+      if (e.code === 'UserNotConfirmedException') {
+        Alert.alert('Confirme seu e-mail', 'Digite o código que enviamos para o seu e-mail.');
+        navigation.navigate('Register', { emailPendente: email });
+      } else {
+        Alert.alert('Erro', mensagemErro(e));
+      }
     } finally {
       setLoading(false);
     }

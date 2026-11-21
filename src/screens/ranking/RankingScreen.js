@@ -1,10 +1,9 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, FlatList, StyleSheet, ActivityIndicator } from 'react-native';
-import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
+import React, { useCallback, useState } from 'react';
+import { View, Text, FlatList, StyleSheet, ActivityIndicator, RefreshControl } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { db } from '../../config/firebase';
+import { buscarRanking } from '../../services/userService';
 import UserCard from '../../components/UserCard';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 
 export default function RankingScreen() {
   const [ranking, setRanking] = useState([]);
@@ -12,15 +11,21 @@ export default function RankingScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
 
-  useEffect(() => {
-    const q = query(collection(db, 'users'), orderBy('xpTotal', 'desc'), limit(20));
-    const unsubscribe = onSnapshot(q, (snap) => {
-      const dados = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      setRanking(dados);
+  const [atualizando, setAtualizando] = useState(false);
+
+  async function carregar() {
+    try {
+      setRanking(await buscarRanking(20));
+    } catch (e) {
+      console.error('Erro ao carregar ranking:', e);
+    } finally {
       setLoading(false);
-    });
-    return unsubscribe;
-  }, []);
+      setAtualizando(false);
+    }
+  }
+
+  // Recarrega sempre que a tela do ranking for aberta
+  useFocusEffect(useCallback(() => { carregar(); }, []));
 
   if (loading) return <View style={styles.center}><ActivityIndicator color="#4CAF50" size="large" /></View>;
 
@@ -38,6 +43,7 @@ export default function RankingScreen() {
           />
         )}
         contentContainerStyle={{ padding: 16 }}
+        refreshControl={<RefreshControl refreshing={atualizando} onRefresh={() => { setAtualizando(true); carregar(); }} tintColor="#4CAF50" />}
         ListEmptyComponent={<Text style={styles.empty}>Nenhum corredor ainda</Text>}
       />
     </View>

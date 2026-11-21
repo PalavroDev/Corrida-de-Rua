@@ -1,70 +1,75 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth';
-import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
-import { auth, db } from '../config/firebase';
-import { XP_RULES } from '../constants/levels';
+import * as cognito from '../services/cognito';
+import { api } from '../services/api';
 
 const AuthContext = createContext({});
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
-  const [userData, setUserData] = useState(null);
+  const [user, setUser] = useState(null);       // { uid, email } vindo do token do Cognito
+  const [userData, setUserData] = useState(null); // perfil guardado no DynamoDB
   const [loading, setLoading] = useState(true);
 
+  // Ao abrir o app, recupera a sessao salva (se houver)
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) {
-        setUser(firebaseUser);
-        await carregarDadosUsuario(firebaseUser.uid);
-      } else {
-        setUser(null);
-        setUserData(null);
+    (async () => {
+      try {
+        const token = await cognito.obterIdToken();
+        if (token) await iniciarSessao(token);
+      } catch (e) {
+        console.error('Erro ao restaurar sessão:', e);
+        await cognito.limparSessao();
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
-    });
-    return unsubscribe;
+    })();
   }, []);
 
-  async function carregarDadosUsuario(uid) {
-    try {
-      const docRef = doc(db, 'users', uid);
-      const docSnap = await getDoc(docRef);
-      if (docSnap.exists()) setUserData(docSnap.data());
-    } catch (error) {
-      console.error('Erro ao carregar dados do usuário:', error);
-    }
+  async function iniciarSessao(idToken) {
+    const claims = cognito.lerToken(idToken);
+    const perfil = await api('GET', '/usuarios/me'); // cria o perfil no primeiro acesso
+    setUserData(perfil);
+    setUser({ uid: claims.sub, email: claims.email });
   }
 
+  // Passo 1 do cadastro: cria a conta no Cognito e envia o codigo por e-mail
   async function cadastrar(email, senha, nome, username) {
-    const userCredential = await createUserWithEmailAndPassword(auth, email, senha);
-    const { uid } = userCredential.user;
-    const novoUsuario = {
-      uid, nome, username: username.toLowerCase(), email,
-      xpTotal: XP_RULES.PRIMEIRO_CADASTRO,
-      corridas: [], totalKm: 0, totalCorridas: 0,
-      sequenciaAtual: 0, maiorSequencia: 0,
-      seguidores: [], seguindo: [], conquistas: [],
-      criadoEm: serverTimestamp(), fotoURL: null,
-    };
-    await setDoc(doc(db, 'users', uid), novoUsuario);
-    setUserData(novoUsuario);
-    return userCredential;
+    await cognito.cadastrar(email, senha, nome, username);
+  }
+
+  // Passo 2 do cadastro: confirma o codigo e ja entra no app
+  async function confirmarCadastro(email, codigo, senha) {
+    await cognito.confirmarCadastro(email, codigo);
+    if (senha) await login(email, senha);
+  }
+
+  async function reenviarCodigo(email) {
+    await cognito.reenviarCodigo(email);
   }
 
   async function login(email, senha) {
-    return signInWithEmailAndPassword(auth, email, senha);
+    const sessao = await cognito.entrar(email, senha);
+    await iniciarSessao(sessao.idToken);
   }
 
   async function logout() {
-    await signOut(auth);
+    await cognito.sair();
+    setUser(null);
+    setUserData(null);
   }
 
   async function recarregarUsuario() {
-    if (user) await carregarDadosUsuario(user.uid);
+    if (!user) return;
+    try {
+      setUserData(await api('GET', '/usuarios/me'));
+    } catch (e) {
+      console.error('Erro ao carregar dados do usuário:', e);
+    }
   }
 
   return (
-    <AuthContext.Provider value={{ user, userData, loading, cadastrar, login, logout, recarregarUsuario }}>
+    <AuthContext.Provider value={{
+      user, userData, loading, cadastrar, confirmarCadastro, reenviarCodigo, login, logout, recarregarUsuario,
+    }}>
       {children}
     </AuthContext.Provider>
   );

@@ -4,18 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../contexts/AuthContext';
 import XPProgressBar from '../../components/XPProgressBar';
 import LevelBadge from '../../components/LevelBadge';
-import { collection, addDoc, serverTimestamp, doc, updateDoc, increment } from 'firebase/firestore';
-import { db } from '../../config/firebase';
-
-const CORRIDAS_TESTE = [
-  { distanciaKm: 5.2,  duracaoSegundos: 1680, ritmoMedio: 5.4, xpGanho: 122, diasAtras: 1 },
-  { distanciaKm: 3.1,  duracaoSegundos: 1020, ritmoMedio: 5.5, xpGanho: 73,  diasAtras: 3 },
-  { distanciaKm: 8.0,  duracaoSegundos: 2700, ritmoMedio: 5.6, xpGanho: 205, diasAtras: 5 },
-  { distanciaKm: 10.5, duracaoSegundos: 3540, ritmoMedio: 5.6, xpGanho: 282, diasAtras: 8 },
-  { distanciaKm: 4.7,  duracaoSegundos: 1560, ritmoMedio: 5.5, xpGanho: 109, diasAtras: 10 },
-  { distanciaKm: 6.3,  duracaoSegundos: 2100, ritmoMedio: 5.6, xpGanho: 151, diasAtras: 12 },
-  { distanciaKm: 12.0, duracaoSegundos: 4200, ritmoMedio: 5.8, xpGanho: 324, diasAtras: 15 },
-];
+import { inserirCorridasTeste } from '../../services/runService';
 
 export default function HomeScreen({ navigation }) {
   const { userData, user, recarregarUsuario, logout } = useAuth();
@@ -26,32 +15,9 @@ export default function HomeScreen({ navigation }) {
     if (!user) return;
     setSeedLoading(true);
     try {
-      let xpTotal = 0, kmTotal = 0;
-      for (const c of CORRIDAS_TESTE) {
-        const data = new Date();
-        data.setDate(data.getDate() - c.diasAtras);
-        await addDoc(collection(db, 'corridas'), {
-          uid: user.uid,
-          distanciaKm: c.distanciaKm,
-          duracaoSegundos: c.duracaoSegundos,
-          ritmoMedio: c.ritmoMedio,
-          coordenadas: [],
-          xpGanho: c.xpGanho,
-          criadaEm: data,
-        });
-        xpTotal += c.xpGanho;
-        kmTotal += c.distanciaKm;
-      }
-      await updateDoc(doc(db, 'users', user.uid), {
-        xpTotal: increment(xpTotal),
-        totalKm: increment(kmTotal),
-        totalCorridas: increment(CORRIDAS_TESTE.length),
-        sequenciaAtual: 3,
-        maiorSequencia: 7,
-        maiorDistancia: 12.0,
-      });
+      const r = await inserirCorridasTeste();
       await recarregarUsuario();
-      Alert.alert('✅ Dados inseridos!', `${CORRIDAS_TESTE.length} corridas adicionadas\n+${xpTotal} XP\n+${kmTotal.toFixed(1)} km`);
+      Alert.alert('✅ Dados inseridos!', `${r.corridas} corridas adicionadas\n+${r.xpGanho} XP`);
     } catch (e) {
       Alert.alert('Erro', e.message);
     } finally {
